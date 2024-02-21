@@ -1,4 +1,132 @@
+AWSTemplateFormatVersion: 2010-09-09
 
+Description: Basic Network
+
+Parameters:
+  VpcCidr:
+    Description: VpcCidr
+    Type: String
+    Default: 10.20.0.0/16
+
+  Environment:
+    Description: Environment
+    Type: String
+    Default: lab
+
+  Project:
+    Description: Environment
+    Type: String
+    Default: FRI    
+
+  PublicSubnetACidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 10
+  PublicSubnetBCidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 20
+  PublicSubnetCCidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 30
+
+  PrivateSubnetACidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 11
+  PrivateSubnetBCidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 21
+  PrivateSubnetCCidrBlock:
+    Description: Cidr block number
+    Type: String
+    Default: 31
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - { Key: Name, Value: !Join [ '-', [!Ref Environment, vpc] ] }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: Igw }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+###########################################################################################
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ !Ref PublicSubnetACidrBlock, !Cidr [ !Ref VpcCidr, 256, 8 ]]
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: PublicSubnetA }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ !Ref PublicSubnetBCidrBlock, !Cidr [ !Ref VpcCidr, 256, 8 ]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: PublicSubnetB }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ !Ref PublicSubnetCCidrBlock, !Cidr [ !Ref VpcCidr, 256, 8 ]]
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: PublicSubnetC }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: PublicRouteTable }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref Project }
+
+  PublicSubnetsRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
       SubnetId: !Ref PublicSubnetA
       RouteTableId: !Ref PublicRouteTable
   PublicSubnetRouteTableAssociationB:
@@ -95,13 +223,6 @@
         DestinationCidrBlock: '0.0.0.0/0'
         NatGatewayId: !Ref NATGatewayA
 
-  RoutetoSecondaryVPC:
-    Type: AWS::EC2::Route
-    Properties:
-        RouteTableId: !Ref PrivateRouteTableA
-        DestinationCidrBlock: '10.222.0.0/16'
-        VpcPeeringConnectionId: pcx-0a2736dfb088925e4       
-
   DefaultRouteB:
     DependsOn: NATGatewayB
     Type: AWS::EC2::Route
@@ -116,7 +237,7 @@
     Properties:
         RouteTableId: !Ref PrivateRouteTableC
         DestinationCidrBlock: '0.0.0.0/0'
-        NatGatewayId: !Ref NATGatewayC        
+        NatGatewayId: !Ref NATGatewayC
 
 ###########################################################################
 
@@ -164,44 +285,3 @@
           - { Key: Name, Value: NatGatewayC }
           - { Key: Environment, Value: !Ref Environment }
           - { Key: Project, Value: !Ref Project }
-
-Outputs:
-  VpcId:
-    Value: !Ref Vpc
-    Export:
-      Name: !Sub ${AWS::StackName}-VpcId
-
-  VpcCidr:
-    Value: !Ref VpcCidr
-    Export:
-      Name: !Sub ${AWS::StackName}-VpcCidr
-
-  PublicSubnetAId:
-    Value: !Ref PublicSubnetA
-    Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetAId
-
-  PublicSubnetBId:
-    Value: !Ref PublicSubnetB
-    Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetBId
-
-  PublicSubnetCId:
-    Value: !Ref PublicSubnetC
-    Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetCId
-
-  PrivateSubnetAId:
-    Value: !Ref PrivateSubnetA
-    Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetAId
-
-  PrivateSubnetBId:
-    Value: !Ref PrivateSubnetB
-    Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetBId
-
-  PrivateSubnetCId:
-    Value: !Ref PrivateSubnetC
-    Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetCId 
